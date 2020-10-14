@@ -15,12 +15,12 @@ F := Files.New("newfile.txt")
 ## Modules
 end-package-description *)
 
-(* begin-module-description
+(* begin-module-use-description
 Module FileDir manages the on-disk representation if directories.
 
 Regular programs do not use FileDir but instead use the api presented by Files which uses FileDir on their behalf.
 
-end-module-description *)
+end-module-use-description *)
 MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Oberon*)
   IMPORT Disk;
 
