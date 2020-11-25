@@ -1,33 +1,39 @@
 (* begin-package-description
-## Overview
+### _Package Overview:_
 The Files package provides:
 
 * Directory operations
 * File i/o
 
-## Examples
+### _Package Use:_
 
 USAGE:
 ```
 F := Files.New("newfile.txt")
 ```
 
-## Modules
+### _Modules in this package:_
 end-package-description *)
 
 (* begin-module-use-description
-Module FileDir manages the on-disk representation if directories.
+Module FileDir implements the following operations on the binary tree of directory pages stored on disk:
+* inserting directory entries
+* deleting directory entries
+* searching for directory entries
+* enumerating directory entries
+* initializing the Kernel sector table bitmap
 
-Regular programs do not use FileDir but instead use the api presented by Files which uses FileDir on their behalf.
+FileDir is not intended for use by regular programs. The FileDir interface is used by the Files module which regular programs may access.
 
 end-module-use-description *)
-MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Oberon*)
-  IMPORT Disk;
+MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013*)
+  IMPORT SYSTEM, Kernel;
 
   (*File Directory is a B-tree with its root page at DirRootAdr.
     Each entry contains a file name and the disk address of the file's head sector*)
 
-  CONST FnLength*    = 32;
+  CONST 
+        FnLength*    = 32;
         SecTabSize*   = 64;
         ExTabSize*   = 12;
         SectorSize*   = 1024;
@@ -40,7 +46,8 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
         HeaderMark* = 9BA71D86H;
         FillerSize = 52;
 
-  TYPE DiskAdr      = INTEGER;
+  TYPE 
+    DiskAdr         = INTEGER;
     FileName*       = ARRAY FnLength OF CHAR;
     SectorTable*    = ARRAY SecTabSize OF DiskAdr;
     ExtensionTable* = ARRAY ExTabSize OF DiskAdr;
@@ -75,13 +82,21 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
         e*:  ARRAY DirPgSize OF DirEntry
       END ;
 
-  (*Exported procedures: Search, Insert, Delete, Enumerate, Init*)
+  VAR
 
+  (* begin-section-description
+## ---------- API: Search, Insert, Delete, Enumerate, Init
+  end-section-description *)
+
+  (* begin-procedure-description
+---
+**Search** finds the DiskAdr for a given FileName.
+  end-procedure-description *)
   PROCEDURE Search*(name: FileName; VAR A: DiskAdr);
     VAR i, L, R: INTEGER; dadr: DiskAdr;
       a: DirPage;
   BEGIN dadr := DirRootAdr; A := 0;
-    REPEAT Disk.GetSector(dadr, a); ASSERT(a.mark = DirMark);
+    REPEAT Kernel.GetSector(dadr, a); ASSERT(a.mark = DirMark);
       L := 0; R := a.m; (*binary search*)
       WHILE L < R DO
         i := (L+R) DIV 2;
@@ -94,6 +109,10 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
     UNTIL (dadr = 0) OR (A # 0)
   END Search;
 
+  (* begin-procedure-description
+---
+**insert** is the recursive procedure for finding a DirEntry to place a FileName in.
+  end-procedure-description *)
   PROCEDURE insert(name: FileName;
                    dpg0:  DiskAdr;
                    VAR h: BOOLEAN;
@@ -106,14 +125,14 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
       u: DirEntry;
       a: DirPage;
 
-  BEGIN (*~h*) Disk.GetSector(dpg0, a); ASSERT(a.mark = DirMark);
+  BEGIN (*~h*) Kernel.GetSector(dpg0, a); ASSERT(a.mark = DirMark);
     L := 0; R := a.m; (*binary search*)
     WHILE L < R DO
       i := (L+R) DIV 2;
       IF name <= a.e[i].name THEN R := i ELSE L := i+1 END
     END ;
     IF (R < a.m) & (name = a.e[R].name) THEN
-      a.e[R].adr := fad; Disk.PutSector(dpg0, a)  (*replace*)
+      a.e[R].adr := fad; Kernel.PutSector(dpg0, a)  (*replace*)
     ELSE (*not on this page*)
       IF R = 0 THEN dpg1 := a.p0 ELSE dpg1 := a.e[R-1].p END ;
       IF dpg1 = 0 THEN (*not in tree, insert*)
@@ -134,12 +153,12 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
           IF R < N THEN (*insert in left half*)
             v := a.e[N-1]; i := N-1;
             WHILE i > R DO DEC(i); a.e[i+1] := a.e[i] END ;
-            a.e[R] := u; Disk.PutSector(dpg0, a);
-            Disk.AllocSector(dpg0, dpg0); i := 0;
+            a.e[R] := u; Kernel.PutSector(dpg0, a);
+            Kernel.AllocSector(dpg0, dpg0); i := 0;
             WHILE i < N DO a.e[i] := a.e[i+N]; INC(i) END
           ELSE (*insert in right half*)
-            Disk.PutSector(dpg0, a);
-            Disk.AllocSector(dpg0, dpg0); DEC(R, N); i := 0;
+            Kernel.PutSector(dpg0, a);
+            Kernel.AllocSector(dpg0, dpg0); DEC(R, N); i := 0;
             IF R = 0 THEN v := u
             ELSE v := a.e[N];
               WHILE i < R-1 DO a.e[i] := a.e[N+1+i]; INC(i) END ;
@@ -149,11 +168,15 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
           END ;
           a.p0 := v.p; v.p := dpg0
         END ;
-        Disk.PutSector(dpg0, a)
+        Kernel.PutSector(dpg0, a)
       END
     END
   END insert;
 
+  (* begin-procedure-description
+---
+**Insert** starts the process of finding a DirEntry to place a FileName in.
+  end-procedure-description *)
   PROCEDURE Insert*(name: FileName; fad: DiskAdr);
     VAR  oldroot: DiskAdr;
       h: BOOLEAN; U: DirEntry;
@@ -161,13 +184,18 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
   BEGIN h := FALSE;
     insert(name, DirRootAdr, h, U, fad);
     IF h THEN (*root overflow*)
-      Disk.GetSector(DirRootAdr, a); ASSERT(a.mark = DirMark);
-      Disk.AllocSector(DirRootAdr, oldroot); Disk.PutSector(oldroot, a);
+      Kernel.GetSector(DirRootAdr, a); ASSERT(a.mark = DirMark);
+      Kernel.AllocSector(DirRootAdr, oldroot); Kernel.PutSector(oldroot, a);
       a.mark := DirMark; a.m := 1; a.p0 := oldroot; a.e[0] := U;
-      Disk.PutSector(DirRootAdr, a)
+      Kernel.PutSector(DirRootAdr, a)
     END
   END Insert;
 
+
+  (* begin-procedure-description
+---
+**underflow** handles the case of DirPage underflow on DirEntry deletion.
+  end-procedure-description *)
   PROCEDURE underflow(VAR c: DirPage;  (*ancestor page*)
                       dpg0:  DiskAdr;
                       s:     INTEGER;  (*insertion point in c*)
@@ -175,10 +203,10 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
     VAR i, k: INTEGER;
         dpg1: DiskAdr;
         a, b: DirPage;  (*a := underflowing page, b := neighbouring page*)
-  BEGIN Disk.GetSector(dpg0, a); ASSERT(a.mark = DirMark);
+  BEGIN Kernel.GetSector(dpg0, a); ASSERT(a.mark = DirMark);
     (*h & a.m = N-1 & dpg0 = c.e[s-1].p*)
     IF s < c.m THEN (*b := page to the right of a*)
-      dpg1 := c.e[s].p; Disk.GetSector(dpg1, b); ASSERT(b.mark = DirMark);
+      dpg1 := c.e[s].p; Kernel.GetSector(dpg1, b); ASSERT(b.mark = DirMark);
       k := (b.m-N+1) DIV 2; (*k = no. of items available on page b*)
       a.e[N-1] := c.e[s]; a.e[N-1].p := b.p0;
       IF k > 0 THEN
@@ -187,17 +215,17 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
         c.e[s] := b.e[i]; b.p0 := c.e[s].p;
         c.e[s].p := dpg1; b.m := b.m - k; i := 0;
         WHILE i < b.m DO b.e[i] := b.e[i+k]; INC(i) END ;
-        Disk.PutSector(dpg1, b); a.m := N-1+k; h := FALSE
+        Kernel.PutSector(dpg1, b); a.m := N-1+k; h := FALSE
       ELSE (*merge pages a and b, discard b*) i := 0;
         WHILE i < N DO a.e[i+N] := b.e[i]; INC(i) END ;
         i := s; DEC(c.m);
         WHILE i < c.m DO c.e[i] := c.e[i+1]; INC(i) END ;
         a.m := 2*N; h := c.m < N
       END ;
-      Disk.PutSector(dpg0, a)
+      Kernel.PutSector(dpg0, a)
     ELSE (*b := page to the left of a*) DEC(s);
       IF s = 0 THEN dpg1 := c.p0 ELSE dpg1 := c.e[s-1].p END ;
-      Disk.GetSector(dpg1, b); ASSERT(b.mark = DirMark);
+      Kernel.GetSector(dpg1, b); ASSERT(b.mark = DirMark);
       k := (b.m-N+1) DIV 2; (*k = no. of items available on page b*)
       IF k > 0 THEN
         i := N-1;
@@ -207,16 +235,20 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
         WHILE i > 0 DO DEC(i); a.e[i] := b.e[i+b.m+1] END ;
         c.e[s] := b.e[b.m]; a.p0 := c.e[s].p;
         c.e[s].p := dpg0; a.m := N-1+k; h := FALSE;
-        Disk.PutSector(dpg0, a)
+        Kernel.PutSector(dpg0, a)
       ELSE (*merge pages a and b, discard a*)
         c.e[s].p := a.p0; b.e[N] := c.e[s]; i := 0;
         WHILE i < N-1 DO b.e[i+N+1] := a.e[i]; INC(i) END ;
         b.m := 2*N; DEC(c.m); h := c.m < N
       END ;
-      Disk.PutSector(dpg1, b)
+      Kernel.PutSector(dpg1, b)
     END
   END underflow;
 
+  (* begin-procedure-description
+---
+**delete** is the recursive function that searches for and removes a DirEntry.
+  end-procedure-description *)
   PROCEDURE delete(name: FileName;
                    dpg0: DiskAdr;
                    VAR h: BOOLEAN;
@@ -228,19 +260,23 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
       dpg1: DiskAdr;
       a: DirPage;
 
+  (* begin-procedure-description
+---
+**del** is the interior procedure that re-writes a DirPage to remove a DirEntry.
+  end-procedure-description *)
     PROCEDURE del(VAR a: DirPage; R: INTEGER; dpg1: DiskAdr; VAR h: BOOLEAN);
       VAR dpg2: DiskAdr;  (*global: a, R*)
           b: DirPage;
-    BEGIN Disk.GetSector(dpg1, b); ASSERT(b.mark = DirMark); dpg2 := b.e[b.m-1].p;
+    BEGIN Kernel.GetSector(dpg1, b); ASSERT(b.mark = DirMark); dpg2 := b.e[b.m-1].p;
       IF dpg2 # 0 THEN del(a, R, dpg2, h);
-        IF h THEN underflow(b, dpg2, b.m, h); Disk.PutSector(dpg1, b) END
+        IF h THEN underflow(b, dpg2, b.m, h); Kernel.PutSector(dpg1, b) END
       ELSE
         b.e[b.m-1].p := a.e[R].p; a.e[R] := b.e[b.m-1];
-        DEC(b.m); h := b.m < N; Disk.PutSector(dpg1, b)
+        DEC(b.m); h := b.m < N; Kernel.PutSector(dpg1, b)
       END
     END del;
 
-  BEGIN (*~h*) Disk.GetSector(dpg0, a); ASSERT(a.mark = DirMark);
+  BEGIN (*~h*) Kernel.GetSector(dpg0, a); ASSERT(a.mark = DirMark);
     L := 0; R := a.m; (*binary search*)
     WHILE L < R DO
       i := (L+R) DIV 2;
@@ -255,35 +291,43 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
       ELSE del(a, R, dpg1, h);
         IF h THEN underflow(a, dpg1, R, h) END
       END ;
-      Disk.PutSector(dpg0, a)
+      Kernel.PutSector(dpg0, a)
     ELSIF dpg1 # 0 THEN
       delete(name, dpg1, h, fad);
-      IF h THEN underflow(a, dpg1, R, h); Disk.PutSector(dpg0, a) END
+      IF h THEN underflow(a, dpg1, R, h); Kernel.PutSector(dpg0, a) END
     ELSE (*not in tree*) fad := 0
     END
   END delete;
 
+  (* begin-procedure-description
+---
+**Delete** starts the process of removing a DirEntry with a given FileName.
+  end-procedure-description *)
   PROCEDURE Delete*(name: FileName; VAR fad: DiskAdr);
     VAR h: BOOLEAN; newroot: DiskAdr;
       a: DirPage;
   BEGIN h := FALSE;
     delete(name, DirRootAdr, h, fad);
     IF h THEN (*root underflow*)
-      Disk.GetSector(DirRootAdr, a); ASSERT(a.mark = DirMark);
+      Kernel.GetSector(DirRootAdr, a); ASSERT(a.mark = DirMark);
       IF (a.m = 0) & (a.p0 # 0) THEN
-        newroot := a.p0; Disk.GetSector(newroot, a); ASSERT(a.mark = DirMark);
-        Disk.PutSector(DirRootAdr, a) (*discard newroot*)
+        newroot := a.p0; Kernel.GetSector(newroot, a); ASSERT(a.mark = DirMark);
+        Kernel.PutSector(DirRootAdr, a) (*discard newroot*)
       END
     END
   END Delete;
 
+  (* begin-procedure-description
+---
+**enumerate** is the recursive function that iteratively calls a passed-in procedure on DirEntries with names that match a prefix.
+  end-procedure-description *)
   PROCEDURE enumerate(prefix:   ARRAY OF CHAR;
                       dpg:          DiskAdr;
                       proc:         EntryHandler;
                       VAR continue: BOOLEAN);
     VAR i, j: INTEGER; pfx, nmx: CHAR;
       dpg1: DiskAdr; a: DirPage;
-  BEGIN Disk.GetSector(dpg, a); ASSERT(a.mark = DirMark); i := 0;
+  BEGIN Kernel.GetSector(dpg, a); ASSERT(a.mark = DirMark); i := 0;
     WHILE (i < a.m) & continue DO
       j := 0;
       REPEAT pfx := prefix[j]; nmx := a.e[i].name[j]; INC(j)
@@ -303,18 +347,21 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
     END
   END enumerate;
 
+  (* begin-procedure-description
+---
+**Enumerate** starts the process of listing directory entries matching a prefix.
+  end-procedure-description *)
   PROCEDURE Enumerate*(prefix: ARRAY OF CHAR; proc: EntryHandler);
     VAR b: BOOLEAN;
   BEGIN b := TRUE; enumerate(prefix, DirRootAdr, proc, b)
   END Enumerate;
 
-  PROCEDURE Attributes*(fad: INTEGER; VAR length, date: INTEGER);
-    VAR hd: FileHeader;
-  BEGIN Disk.GetSector(fad, hd); length := hd.aleng * SectorSize + hd.bleng - HeaderSize; date := hd.date;
-  END Attributes;
+(* ----- initialization ----- *)
 
-  (* ----- initialization ----- *)
-
+  (* begin-procedure-description
+---
+**Init** preapres Oberon to use the disk by marking used sectors in the Kernel sector map.
+  end-procedure-description *)
   PROCEDURE Init*;
     VAR k: INTEGER;
         A: ARRAY 2000 OF DiskAdr;
@@ -340,17 +387,17 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
         DEC(R); x := A[0]; A[0] := A[R]; A[R] := x; sift(A, L, R)
       END ;
       WHILE L < k DO
-        Disk.GetSector(A[L], hd); ASSERT(hd.mark = HeaderMark);
+        Kernel.GetSector(A[L], hd); ASSERT(hd.mark = HeaderMark);
         IF hd.aleng < SecTabSize THEN j := hd.aleng + 1;
-          REPEAT DEC(j); Disk.MarkSector(hd.sec[j]) UNTIL j = 0
+          REPEAT DEC(j); Kernel.MarkSector(hd.sec[j]) UNTIL j = 0
         ELSE j := SecTabSize;
-          REPEAT DEC(j); Disk.MarkSector(hd.sec[j]) UNTIL j = 0;
+          REPEAT DEC(j); Kernel.MarkSector(hd.sec[j]) UNTIL j = 0;
           n := (hd.aleng - SecTabSize) DIV 256; i := 0;
           WHILE i <= n DO
-            Disk.MarkSector(hd.ext[i]);
-            Disk.GetSector(hd.ext[i], B); (*index sector*)
+            Kernel.MarkSector(hd.ext[i]);
+            Kernel.GetSector(hd.ext[i], B); (*index sector*)
             IF i < n THEN j := 256 ELSE j := (hd.aleng - SecTabSize) MOD 256 + 1 END ;
-            REPEAT DEC(j); Disk.MarkSector(B[j]) UNTIL j = 0;
+            REPEAT DEC(j); Kernel.MarkSector(B[j]) UNTIL j = 0;
             INC(i)
           END
         END ;
@@ -360,7 +407,7 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013 / AP 22.3.20 Extended Obero
 
     PROCEDURE TraverseDir(VAR A: ARRAY OF DiskAdr; VAR k: INTEGER; dpg: DiskAdr);
       VAR i: INTEGER; a: DirPage;
-    BEGIN Disk.GetSector(dpg, a); ASSERT(a.mark = DirMark); Disk.MarkSector(dpg); i := 0;
+    BEGIN Kernel.GetSector(dpg, a); ASSERT(a.mark = DirMark); Kernel.MarkSector(dpg); i := 0;
       WHILE i < a.m DO
         A[k] := a.e[i].adr; INC(k); INC(i);
         IF k = 2000 THEN MarkSectors(A, k); k := 0 END
