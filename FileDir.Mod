@@ -1,3 +1,7 @@
+(* begin-module-short-description
+implements directory behavior for Files.
+end-module-short-description *)
+
 (* begin-package-description
 ### _Package Overview:_
 The Files package provides:
@@ -17,6 +21,7 @@ end-package-description *)
 
 (* begin-module-use-description
 Module FileDir implements the following operations on the binary tree of directory pages stored on disk:
+
 * inserting directory entries
 * deleting directory entries
 * searching for directory entries
@@ -26,6 +31,11 @@ Module FileDir implements the following operations on the binary tree of directo
 FileDir is not intended for use by regular programs. The FileDir interface is used by the Files module which regular programs may access.
 
 end-module-use-description *)
+
+(* begin-module-develop-description
+    (NW 12.1.86 / 23.8.90 / 15.8.2013)
+end-module-develop-description *)
+
 MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013*)
   IMPORT SYSTEM, Kernel;
 

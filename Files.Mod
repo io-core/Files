@@ -1,11 +1,21 @@
+(* begin-module-short-description
+provides the Files (and directories) API for Oberon.
+end-module-short-description *)
+
 (* begin-module-use-description
 Module Files manages the on-disk representation of files and presents the following APIs:
+
 * File Directory API: Old, New, Register, Close, Purge, Delete, Rename, Date, Length
 * File Read API: Set, Pos, Base, ReadByte, ReadBytes, Read, ReadInt, ReadSet, ReadReal, ReadString, ReadNum
 * File Write API: WriteByte, WriteBytes, Write, WriteInt, WriteReal, WriteString, WriteNum
 * System use: Init, RestoreList
 
 end-module-use-description *)
+
+(* begin-module-develop-description
+  (NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013)
+end-module-develop-description *)
+
 MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   IMPORT SYSTEM, Kernel, FileDir;
 
