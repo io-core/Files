@@ -46,7 +46,8 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
       END ;
 
     FileDesc =
-      RECORD next: INTEGER; (*list of files invisible to the GC*)
+      RECORD 
+        next: INTEGER; (*list of files invisible to the GC*)
         nofbufs, aleng, bleng: INTEGER;
         modH, registered: BOOLEAN;
         firstbuf: Buffer;
@@ -63,9 +64,8 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
 
     SpecialDesc =
       RECORD (FileDesc) 
-        PROCEDURE Register*(f: File);
-        date: INTEGER;
-      END:
+        Register: PROCEDURE (f: File)
+      END;
 
     BufferRecord =
       RECORD apos, lim: INTEGER;
