@@ -52,10 +52,20 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
         firstbuf: Buffer;
         sechint: DiskAdr;
         name: FileDir.FileName;
+        mime: INTEGER; (*32-bit hash of ascii mime type text*)
         date: INTEGER;
         ext:  ARRAY FileDir.ExTabSize OF Index;
         sec: FileDir.SectorTable
       END ;
+
+      (* If name[30] = 0 and name[31] > 0 then name[31] indicates which kind of
+         entity other than a regular file that this is e.g. a pipe, subdir, link, etc.*)
+
+    SpecialDesc =
+      RECORD (FileDesc) 
+        PROCEDURE Register*(f: File);
+        date: INTEGER;
+      END:
 
     BufferRecord =
       RECORD apos, lim: INTEGER;

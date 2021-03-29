@@ -84,6 +84,9 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013*)
         p*:    DiskAdr  (*sec no of descendant in directory*)
       END ;
 
+      (* If name[30] = 0 and name[31] > 0 then name[31] indicates which kind of
+         entity other than a regular file that this is e.g. a pipe, subdir, link, etc.*)
+
     DirPage*  =
       RECORD mark*:  INTEGER;
         m*:     INTEGER;
