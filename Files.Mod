@@ -36,14 +36,28 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
     File*   = POINTER TO FileDesc;
     Buffer  = POINTER TO BufferRecord;
     Index   = POINTER TO IndexRecord;
+    OP    = POINTER TO OPDesc; 
 
     Rider* =
       RECORD eof*: BOOLEAN;
         res*: INTEGER;
         file: File;
         apos, bpos: INTEGER;
-        buf: Buffer
+        buf: Buffer;
+        Op: OP; 
       END ;
+
+    OPDesc* = RECORD
+      Set*:         PROCEDURE (VAR r: Rider; f: File; pos: INTEGER);
+      Pos*:         PROCEDURE (VAR r: Rider): INTEGER;
+      Base*:        PROCEDURE (VAR r: Rider): File;
+      ReadByte*:    PROCEDURE (VAR r: Rider; VAR x: BYTE);
+      Read*:        PROCEDURE (VAR r: Rider; VAR ch: CHAR);
+      WriteByte*:   PROCEDURE (VAR r: Rider; x: BYTE);
+      Write*:       PROCEDURE (VAR r: Rider; ch: CHAR);
+      ReadInt*:     PROCEDURE (VAR R: Rider; VAR x: INTEGER);
+      WriteInt*:    PROCEDURE (VAR R: Rider; x: INTEGER);
+    END;
 
     FileDesc =
       RECORD 
@@ -88,6 +102,8 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
 
   VAR 
     root: INTEGER (*File*);  (*list of open files*)
+    Op: OP; (* operations on file riders *)  
+    OPOrig: OPDesc; 
 
   (* begin-section-description
 ## ---------- File Directory API
@@ -409,7 +425,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE Set*(VAR r: Rider; f: File; pos: INTEGER);
     VAR a, b: INTEGER;
-  BEGIN  r.eof := FALSE; r.res := 0;
+  BEGIN  r.eof := FALSE; r.res := 0; r.Op := Op; 
     IF f # NIL THEN
       IF pos < 0 THEN a := 0; b := HS
       ELSIF pos < f.aleng * SS + f.bleng - HS THEN
@@ -465,7 +481,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   PROCEDURE ReadBytes*(VAR r: Rider; VAR x: ARRAY OF BYTE; n: INTEGER);
     VAR i: INTEGER;
   BEGIN i := 0;  (*this implementation is to be improved*)
-    WHILE i < n DO ReadByte(r, x[i]); INC(i) END
+    WHILE i < n DO r.Op.ReadByte(r, x[i]); INC(i) END
   END ReadBytes;
 
   (* begin-procedure-description
@@ -495,7 +511,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE ReadInt*(VAR R: Rider; VAR x: INTEGER);
     VAR x0, x1, x2, x3: BYTE;
-  BEGIN ReadByte(R, x0); ReadByte(R, x1); ReadByte(R, x2); ReadByte(R, x3);
+  BEGIN R.Op.ReadByte(R, x0); R.Op.ReadByte(R, x1); R.Op.ReadByte(R, x2); R.Op.ReadByte(R, x3);
     x := ((x3 * 100H + x2) * 100H + x1) * 100H + x0
   END ReadInt;
 
@@ -505,12 +521,12 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE ReadSet*(VAR R: Rider; VAR s: SET);
     VAR n: INTEGER;
-  BEGIN ReadInt(R, SYSTEM.VAL(INTEGER, s))
+  BEGIN R.Op.ReadInt(R, SYSTEM.VAL(INTEGER, s))
   END ReadSet;
 
   PROCEDURE ReadReal*(VAR R: Rider; VAR x: REAL);
     VAR n: INTEGER;
-  BEGIN ReadInt(R, SYSTEM.VAL(INTEGER, x))
+  BEGIN R.Op.ReadInt(R, SYSTEM.VAL(INTEGER, x))
   END ReadReal;
 
   (* begin-procedure-description
@@ -519,10 +535,10 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE ReadString*(VAR R: Rider; VAR x: ARRAY OF CHAR);
     VAR i: INTEGER; ch: CHAR;
-  BEGIN i := 0; Read(R, ch);
+  BEGIN i := 0; R.Op.Read(R, ch);
     WHILE ch # 0X DO
       IF i < LEN(x)-1 THEN x[i] := ch; INC(i) END ;
-      Read(R, ch)
+      R.Op.Read(R, ch)
     END ;
     x[i] := 0X
   END ReadString;
@@ -533,8 +549,8 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE ReadNum*(VAR R: Rider; VAR x: INTEGER);
     VAR n, y: INTEGER; b: BYTE;
-  BEGIN n := 32; y := 0; ReadByte(R, b);
-    WHILE b >= 80H DO y := ROR(y + b-80H, 7); DEC(n, 7); ReadByte(R, b) END ;
+  BEGIN n := 32; y := 0; R.Op.ReadByte(R, b);
+    WHILE b >= 80H DO y := ROR(y + b-80H, 7); DEC(n, 7); R.Op.ReadByte(R, b) END ;
     IF n <= 4 THEN x := ROR(y + b MOD 10H, 4) ELSE x := ASR(ROR(y + b, 7), n-7) END
   END ReadNum;
         
@@ -583,12 +599,12 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
 
   (* begin-procedure-description
 ---
-**WriteByte** writes `n` bytes to the file at the rider position, extending the file as necessary.
+**WriteBytes** writes `n` bytes to the file at the rider position, extending the file as necessary.
   end-procedure-description *)
   PROCEDURE WriteBytes*(VAR r: Rider; x: ARRAY OF BYTE; n: INTEGER);
     VAR i: INTEGER;
   BEGIN i := 0; (*this implementation is to be improved*)
-    WHILE i < n DO WriteByte(r, x[i]); INC(i) END
+    WHILE i < n DO r.Op.WriteByte(r, x[i]); INC(i) END
   END WriteBytes;
 
   (* begin-procedure-description
@@ -621,10 +637,10 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
 **WriteInt** writes an Int to the file at the rider position, extending the file as necessary.
   end-procedure-description *)
   PROCEDURE WriteInt*(VAR R: Rider; x: INTEGER);
-  BEGIN WriteByte(R, x MOD 100H);
-    WriteByte(R, x DIV 100H MOD 100H);
-    WriteByte(R, x DIV 10000H MOD 100H);
-    WriteByte(R, x DIV 1000000H MOD 100H)
+  BEGIN R.Op.WriteByte(R, x MOD 100H);
+    R.Op.WriteByte(R, x DIV 100H MOD 100H);
+    R.Op.WriteByte(R, x DIV 10000H MOD 100H);
+    R.Op.WriteByte(R, x DIV 1000000H MOD 100H)
   END WriteInt;
 
   (* begin-procedure-description
@@ -632,15 +648,15 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
 **WriteSet** writes a set to the file at the rider position, extending the file as necessary.
   end-procedure-description *)
   PROCEDURE WriteSet*(VAR R: Rider; s: SET);
-  BEGIN WriteInt(R, ORD(s))
+  BEGIN R.Op.WriteInt(R, ORD(s))
   END WriteSet;
 
   (* begin-procedure-description
 ---
-**WriteByte** writes a Real to the file at the rider position, extending the file as necessary.
+**WriteReal** writes a Real to the file at the rider position, extending the file as necessary.
   end-procedure-description *)
   PROCEDURE WriteReal*(VAR R: Rider; x: REAL);
-  BEGIN  WriteInt(R, ORD(x))
+  BEGIN  R.Op.WriteInt(R, ORD(x))
   END WriteReal;
 
   (* begin-procedure-description
@@ -650,7 +666,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   PROCEDURE WriteString*(VAR R: Rider; x: ARRAY OF CHAR);
     VAR i: INTEGER; ch: CHAR;
   BEGIN i := 0;
-    REPEAT ch := x[i]; Write(R, ch); INC(i) UNTIL ch = 0X
+    REPEAT ch := x[i]; R.Op.Write(R, ch); INC(i) UNTIL ch = 0X
   END WriteString;
 
   (* begin-procedure-description
@@ -659,8 +675,8 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE WriteNum*(VAR R: Rider; x: INTEGER);
   BEGIN
-    WHILE (x < -40H) OR (x >= 40H) DO WriteByte(R, x MOD 80H + 80H); x := ASR(x, 7) END ;
-    WriteByte(R, x MOD 80H)
+    WHILE (x < -40H) OR (x >= 40H) DO R.Op.WriteByte(R, x MOD 80H + 80H); x := ASR(x, 7) END ;
+    R.Op.WriteByte(R, x MOD 80H)
   END WriteNum;
 
   (* begin-section-description
@@ -670,10 +686,23 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
 
   (* begin-procedure-description
 ---
-**Init** (called on system-startup by `Modules`) sets the list of open files to `0` and calls `Kernel.Init` and `FileDir.Init`.
+**Init** (called on system-startup by `Modules`) sets the list of open files to `0`, sets up the file rider vtable, and calls `Kernel.Init` and `FileDir.Init`.
   end-procedure-description *)
   PROCEDURE Init*;
-  BEGIN root := 0; Kernel.Init; FileDir.Init
+  BEGIN 
+    root := 0; 
+
+    Op :=  SYSTEM.VAL(OP,SYSTEM.ADR(OPOrig));  (* Kernel not initialized so no NEW() *)
+    Op.Set :=         Set;
+    Op.Pos :=         Pos;
+    Op.Base :=        Base;
+    Op.ReadByte :=    ReadByte;
+    Op.Read :=        Read;
+    Op.WriteByte :=   WriteByte;
+    Op.Write :=       Write;
+    Op.ReadInt :=     ReadInt;
+    Op.WriteInt :=    WriteInt;
+    Kernel.Init; FileDir.Init
   END Init;
 
   (* begin-procedure-description
