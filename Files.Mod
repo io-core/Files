@@ -37,6 +37,10 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
     Buffer  = POINTER TO BufferRecord;
     Index   = POINTER TO IndexRecord;
     OP*     = POINTER TO OPDesc; 
+    ReadByteProc* = PROCEDURE (VAR r: Rider; VAR x: BYTE);
+    ReadProc* = PROCEDURE (VAR r: Rider; VAR ch: CHAR);
+    WriteByteProc* = PROCEDURE (VAR r: Rider; x: BYTE);
+    WriteProc* = PROCEDURE (VAR r: Rider; ch: CHAR);
 
     Rider* =
       RECORD eof*: BOOLEAN;
@@ -51,12 +55,10 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
       Set*:         PROCEDURE (VAR r: Rider; f: File; pos: INTEGER);
       Pos*:         PROCEDURE (VAR r: Rider): INTEGER;
       Base*:        PROCEDURE (VAR r: Rider): File;
-      ReadByte*:    PROCEDURE (VAR r: Rider; VAR x: BYTE);
-      Read*:        PROCEDURE (VAR r: Rider; VAR ch: CHAR);
-      WriteByte*:   PROCEDURE (VAR r: Rider; x: BYTE);
-      Write*:       PROCEDURE (VAR r: Rider; ch: CHAR);
-      ReadInt*:     PROCEDURE (VAR R: Rider; VAR x: INTEGER);
-      WriteInt*:    PROCEDURE (VAR R: Rider; x: INTEGER);
+      ReadByte*:    ReadByteProc;
+      Read*:        ReadProc;
+      WriteByte*:   WriteByteProc;
+      Write*:       WriteProc;
     END;
 
     FileDesc =
@@ -521,12 +523,12 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE ReadSet*(VAR R: Rider; VAR s: SET);
     VAR n: INTEGER;
-  BEGIN R.Op.ReadInt(R, SYSTEM.VAL(INTEGER, s))
+  BEGINReadInt(R, SYSTEM.VAL(INTEGER, s))
   END ReadSet;
 
   PROCEDURE ReadReal*(VAR R: Rider; VAR x: REAL);
     VAR n: INTEGER;
-  BEGIN R.Op.ReadInt(R, SYSTEM.VAL(INTEGER, x))
+  BEGIN ReadInt(R, SYSTEM.VAL(INTEGER, x))
   END ReadReal;
 
   (* begin-procedure-description
@@ -648,7 +650,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
 **WriteSet** writes a set to the file at the rider position, extending the file as necessary.
   end-procedure-description *)
   PROCEDURE WriteSet*(VAR R: Rider; s: SET);
-  BEGIN R.Op.WriteInt(R, ORD(s))
+  BEGIN WriteInt(R, ORD(s))
   END WriteSet;
 
   (* begin-procedure-description
@@ -656,7 +658,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
 **WriteReal** writes a Real to the file at the rider position, extending the file as necessary.
   end-procedure-description *)
   PROCEDURE WriteReal*(VAR R: Rider; x: REAL);
-  BEGIN  R.Op.WriteInt(R, ORD(x))
+  BEGIN  WriteInt(R, ORD(x))
   END WriteReal;
 
   (* begin-procedure-description
@@ -700,8 +702,6 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
     Op.Read :=        Read;
     Op.WriteByte :=   WriteByte;
     Op.Write :=       Write;
-    Op.ReadInt :=     ReadInt;
-    Op.WriteInt :=    WriteInt;
     Kernel.Init; FileDir.Init
   END Init;
 
