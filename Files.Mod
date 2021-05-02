@@ -37,10 +37,6 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
     Buffer  = POINTER TO BufferRecord;
     Index   = POINTER TO IndexRecord;
     OP*     = POINTER TO OPDesc; 
-    ReadByteProc* = PROCEDURE (VAR r: Rider; VAR x: BYTE);
-    ReadProc* = PROCEDURE (VAR r: Rider; VAR ch: CHAR);
-    WriteByteProc* = PROCEDURE (VAR r: Rider; x: BYTE);
-    WriteProc* = PROCEDURE (VAR r: Rider; ch: CHAR);
 
     Rider* =
       RECORD eof*: BOOLEAN;
@@ -50,6 +46,11 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
         buf: Buffer;
         Op: OP; 
       END ;
+
+    ReadByteProc* = PROCEDURE (VAR r: Rider; VAR x: BYTE);
+    ReadProc* = PROCEDURE (VAR r: Rider; VAR ch: CHAR);
+    WriteByteProc* = PROCEDURE (VAR r: Rider; x: BYTE);
+    WriteProc* = PROCEDURE (VAR r: Rider; ch: CHAR);
 
     OPDesc* = RECORD
       Set*:         PROCEDURE (VAR r: Rider; f: File; pos: INTEGER);
@@ -523,7 +524,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE ReadSet*(VAR R: Rider; VAR s: SET);
     VAR n: INTEGER;
-  BEGINReadInt(R, SYSTEM.VAL(INTEGER, s))
+  BEGIN ReadInt(R, SYSTEM.VAL(INTEGER, s))
   END ReadSet;
 
   PROCEDURE ReadReal*(VAR R: Rider; VAR x: REAL);
