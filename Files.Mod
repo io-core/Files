@@ -36,7 +36,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
     File*   = POINTER TO FileDesc;
     Buffer  = POINTER TO BufferRecord;
     Index   = POINTER TO IndexRecord;
-    OP*     = POINTER TO OPDesc; 
+    OP     = POINTER TO OPDesc; 
 
     Rider* =
       RECORD eof*: BOOLEAN;
@@ -52,14 +52,14 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
     WriteByteProc* = PROCEDURE (VAR r: Rider; x: BYTE);
     WriteProc* = PROCEDURE (VAR r: Rider; ch: CHAR);
 
-    OPDesc* = RECORD
-      Set*:         PROCEDURE (VAR r: Rider; f: File; pos: INTEGER);
-      Pos*:         PROCEDURE (VAR r: Rider): INTEGER;
-      Base*:        PROCEDURE (VAR r: Rider): File;
-      ReadByte*:    ReadByteProc;
-      Read*:        ReadProc;
-      WriteByte*:   WriteByteProc;
-      Write*:       WriteProc;
+    OPDesc = RECORD
+      Set:         PROCEDURE (VAR r: Rider; f: File; pos: INTEGER);
+      Pos:         PROCEDURE (VAR r: Rider): INTEGER;
+      Base:        PROCEDURE (VAR r: Rider): File;
+      ReadByte:    ReadByteProc;
+      Read:        ReadProc;
+      WriteByte:   WriteByteProc;
+      Write:       WriteProc;
     END;
 
     FileDesc =
@@ -106,7 +106,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   VAR 
     root: INTEGER (*File*);  (*list of open files*)
     Op: OP; (* operations on file riders *)  
-    OPOrig: OPDesc; 
+    OPBase: OPDesc; 
 
   (* begin-section-description
 ## ---------- File Directory API
@@ -416,6 +416,48 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   END Date;
 
   (* begin-section-description
+## ---------- API for for extending Rider functionality
+  end-section-description *)
+
+
+  (* begin-procedure-description
+---
+**SetRead** sets the Read procudure for Rider R to P.
+  end-procedure-description *)
+  PROCEDURE SetRead*(VAR R: Rider; P: ReadProc);
+  BEGIN
+    R.Op.Read := P
+  END SetRead;
+
+  (* begin-procedure-description
+---
+**SetReadByte** sets the ReadByte procudure for Rider R to P.
+  end-procedure-description *)
+  PROCEDURE SetReadByte*(VAR R: Rider; P: ReadByteProc);
+  BEGIN
+    R.Op.ReadByte := P
+  END SetReadByte;
+
+  (* begin-procedure-description
+---
+**SetWrite** sets the Write procudure for Rider R to P.
+  end-procedure-description *)
+  PROCEDURE SetWrite*(VAR R: Rider; P: WriteProc);
+  BEGIN
+    R.Op.Write := P
+  END SetWrite;
+
+  (* begin-procedure-description
+---
+**SetWriteByte** sets the WriteByte procudure for Rider R to P.
+  end-procedure-description *)
+  PROCEDURE SetWriteByte*(VAR R: Rider; P: WriteByteProc);
+  BEGIN
+    R.Op.WriteByte := P
+  END SetWriteByte;
+
+
+  (* begin-section-description
 ## ---------- File Reading API
 #### Set, Pos, Base, ReadByte, ReadBytes, Read, ReadInt, ReadSet, ReadReal, ReadString, ReadNum
   end-section-description *)
@@ -695,7 +737,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   BEGIN 
     root := 0; 
 
-    Op :=  SYSTEM.VAL(OP,SYSTEM.ADR(OPOrig));  (* Kernel not initialized so no NEW() *)
+    Op :=  SYSTEM.VAL(OP,SYSTEM.ADR(OPBase));  (* Kernel not initialized so no NEW() *)
     Op.Set :=         Set;
     Op.Pos :=         Pos;
     Op.Base :=        Base;
