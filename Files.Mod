@@ -13,16 +13,19 @@ Module Files manages the on-disk representation of files and presents the follow
 end-module-use-description *)
 
 (* begin-module-develop-description
-  (NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013)
+  (NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013, CP 2021)
 end-module-develop-description *)
 
 MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
+               (*CP 2021*)
   IMPORT SYSTEM, Kernel, FileDir;
 
   (*A file consists of a sequence of pages. The first page
     contains the header. Part of the header is the page table, an array
     of disk addresses to the pages. A file is referenced through riders.
-    A rider indicates a current position and refers to a file*)
+    A rider indicates a current position and refers to a file. File
+    reads and writes may be replaced with other mechansims via ReadProc
+    and WriteProc to implement streams, virtual files, etc. *)
 
   CONST 
     MaxBufs   = 4;
@@ -472,12 +475,16 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
     VAR a, b: INTEGER;
   BEGIN  r.eof := FALSE; r.res := 0; r.Op := Op; 
     IF f # NIL THEN
-      IF pos < 0 THEN a := 0; b := HS
-      ELSIF pos < f.aleng * SS + f.bleng - HS THEN
-        a := (pos + HS) DIV SS; b := (pos + HS) MOD SS;
-      ELSE a := f.aleng; b := f.bleng
-      END ;
-      r.file := f; r.apos := a; r.bpos := b; r.buf := f.firstbuf
+      IF ~((f.name[30] = 0X) & (f.name[31] # 0X)) THEN (* normal file *)
+        IF pos < 0 THEN a := 0; b := HS
+        ELSIF pos < f.aleng * SS + f.bleng - HS THEN
+          a := (pos + HS) DIV SS; b := (pos + HS) MOD SS;
+        ELSE a := f.aleng; b := f.bleng
+        END ;
+        r.file := f; r.apos := a; r.bpos := b; r.buf := f.firstbuf
+      ELSE (* special file *)
+         r.file:=NIL
+      END
     ELSE r.file:= NIL
     END
   END Set;
