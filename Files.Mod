@@ -39,7 +39,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
     File*   = POINTER TO FileDesc;
     Buffer  = POINTER TO BufferRecord;
     Index   = POINTER TO IndexRecord;
-    OP     = POINTER TO OPDesc; 
+    OT      = POINTER TO OTDesc; 
 
     Rider* =
       RECORD eof*: BOOLEAN;
@@ -47,7 +47,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
         file: File;
         apos, bpos: INTEGER;
         buf: Buffer;
-        Op: OP; 
+        Ot: OT; 
       END ;
 
     ReadByteProc* = PROCEDURE (VAR r: Rider; VAR x: BYTE);
@@ -55,7 +55,9 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
     WriteByteProc* = PROCEDURE (VAR r: Rider; x: BYTE);
     WriteProc* = PROCEDURE (VAR r: Rider; ch: CHAR);
 
-    OPDesc = RECORD
+    OTDesc = RECORD
+      Next:        OT;
+      Id:          INTEGER;
       Set:         PROCEDURE (VAR r: Rider; f: File; pos: INTEGER);
       Pos:         PROCEDURE (VAR r: Rider): INTEGER;
       Base:        PROCEDURE (VAR r: Rider): File;
@@ -108,8 +110,8 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
 
   VAR 
     root: INTEGER (*File*);  (*list of open files*)
-    Op: OP; (* operations on file riders *)  
-    OPBase: OPDesc; 
+    Ot: OT; (* operations on file riders *)  
+    OTBase: OTDesc; 
 
   (* begin-section-description
 ## ---------- File Directory API
@@ -429,7 +431,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE SetRead*(VAR R: Rider; P: ReadProc);
   BEGIN
-    R.Op.Read := P
+    R.Ot.Read := P
   END SetRead;
 
   (* begin-procedure-description
@@ -438,7 +440,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE SetReadByte*(VAR R: Rider; P: ReadByteProc);
   BEGIN
-    R.Op.ReadByte := P
+    R.Ot.ReadByte := P
   END SetReadByte;
 
   (* begin-procedure-description
@@ -447,7 +449,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE SetWrite*(VAR R: Rider; P: WriteProc);
   BEGIN
-    R.Op.Write := P
+    R.Ot.Write := P
   END SetWrite;
 
   (* begin-procedure-description
@@ -456,7 +458,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE SetWriteByte*(VAR R: Rider; P: WriteByteProc);
   BEGIN
-    R.Op.WriteByte := P
+    R.Ot.WriteByte := P
   END SetWriteByte;
 
 
@@ -473,7 +475,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE Set*(VAR r: Rider; f: File; pos: INTEGER);
     VAR a, b: INTEGER;
-  BEGIN  r.eof := FALSE; r.res := 0; r.Op := Op; 
+  BEGIN  r.eof := FALSE; r.res := 0; r.Ot := Ot; 
     IF f # NIL THEN
       IF ~((f.name[30] = 0X) & (f.name[31] # 0X)) THEN (* normal file *)
         IF pos < 0 THEN a := 0; b := HS
@@ -533,7 +535,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   PROCEDURE ReadBytes*(VAR r: Rider; VAR x: ARRAY OF BYTE; n: INTEGER);
     VAR i: INTEGER;
   BEGIN i := 0;  (*this implementation is to be improved*)
-    WHILE i < n DO r.Op.ReadByte(r, x[i]); INC(i) END
+    WHILE i < n DO r.Ot.ReadByte(r, x[i]); INC(i) END
   END ReadBytes;
 
   (* begin-procedure-description
@@ -563,7 +565,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE ReadInt*(VAR R: Rider; VAR x: INTEGER);
     VAR x0, x1, x2, x3: BYTE;
-  BEGIN R.Op.ReadByte(R, x0); R.Op.ReadByte(R, x1); R.Op.ReadByte(R, x2); R.Op.ReadByte(R, x3);
+  BEGIN R.Ot.ReadByte(R, x0); R.Ot.ReadByte(R, x1); R.Ot.ReadByte(R, x2); R.Ot.ReadByte(R, x3);
     x := ((x3 * 100H + x2) * 100H + x1) * 100H + x0
   END ReadInt;
 
@@ -587,10 +589,10 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE ReadString*(VAR R: Rider; VAR x: ARRAY OF CHAR);
     VAR i: INTEGER; ch: CHAR;
-  BEGIN i := 0; R.Op.Read(R, ch);
+  BEGIN i := 0; R.Ot.Read(R, ch);
     WHILE ch # 0X DO
       IF i < LEN(x)-1 THEN x[i] := ch; INC(i) END ;
-      R.Op.Read(R, ch)
+      R.Ot.Read(R, ch)
     END ;
     x[i] := 0X
   END ReadString;
@@ -601,8 +603,8 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE ReadNum*(VAR R: Rider; VAR x: INTEGER);
     VAR n, y: INTEGER; b: BYTE;
-  BEGIN n := 32; y := 0; R.Op.ReadByte(R, b);
-    WHILE b >= 80H DO y := ROR(y + b-80H, 7); DEC(n, 7); R.Op.ReadByte(R, b) END ;
+  BEGIN n := 32; y := 0; R.Ot.ReadByte(R, b);
+    WHILE b >= 80H DO y := ROR(y + b-80H, 7); DEC(n, 7); R.Ot.ReadByte(R, b) END ;
     IF n <= 4 THEN x := ROR(y + b MOD 10H, 4) ELSE x := ASR(ROR(y + b, 7), n-7) END
   END ReadNum;
         
@@ -656,7 +658,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   PROCEDURE WriteBytes*(VAR r: Rider; x: ARRAY OF BYTE; n: INTEGER);
     VAR i: INTEGER;
   BEGIN i := 0; (*this implementation is to be improved*)
-    WHILE i < n DO r.Op.WriteByte(r, x[i]); INC(i) END
+    WHILE i < n DO r.Ot.WriteByte(r, x[i]); INC(i) END
   END WriteBytes;
 
   (* begin-procedure-description
@@ -689,10 +691,10 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
 **WriteInt** writes an Int to the file at the rider position, extending the file as necessary.
   end-procedure-description *)
   PROCEDURE WriteInt*(VAR R: Rider; x: INTEGER);
-  BEGIN R.Op.WriteByte(R, x MOD 100H);
-    R.Op.WriteByte(R, x DIV 100H MOD 100H);
-    R.Op.WriteByte(R, x DIV 10000H MOD 100H);
-    R.Op.WriteByte(R, x DIV 1000000H MOD 100H)
+  BEGIN R.Ot.WriteByte(R, x MOD 100H);
+    R.Ot.WriteByte(R, x DIV 100H MOD 100H);
+    R.Ot.WriteByte(R, x DIV 10000H MOD 100H);
+    R.Ot.WriteByte(R, x DIV 1000000H MOD 100H)
   END WriteInt;
 
   (* begin-procedure-description
@@ -718,7 +720,7 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   PROCEDURE WriteString*(VAR R: Rider; x: ARRAY OF CHAR);
     VAR i: INTEGER; ch: CHAR;
   BEGIN i := 0;
-    REPEAT ch := x[i]; R.Op.Write(R, ch); INC(i) UNTIL ch = 0X
+    REPEAT ch := x[i]; R.Ot.Write(R, ch); INC(i) UNTIL ch = 0X
   END WriteString;
 
   (* begin-procedure-description
@@ -727,9 +729,37 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   end-procedure-description *)
   PROCEDURE WriteNum*(VAR R: Rider; x: INTEGER);
   BEGIN
-    WHILE (x < -40H) OR (x >= 40H) DO R.Op.WriteByte(R, x MOD 80H + 80H); x := ASR(x, 7) END ;
-    R.Op.WriteByte(R, x MOD 80H)
+    WHILE (x < -40H) OR (x >= 40H) DO R.Ot.WriteByte(R, x MOD 80H + 80H); x := ASR(x, 7) END ;
+    R.Ot.WriteByte(R, x MOD 80H)
   END WriteNum;
+
+  (* begin-procedure-description
+---
+**RegisterOT** enrolls an OTDesc table of function pointers in the Files module.
+  end-procedure-description *)
+  PROCEDURE RegisterOT*(VAR o: OT);
+    VAR t: OT;
+  BEGIN
+    IF (o # NIL) & (o.Id > 0) THEN
+      t:=Ot;
+      WHILE (t.Next # NIL) & (t.Id < o.Id) DO t:=t.Next END;
+      IF t.Id # o.Id THEN o.Next := t.Next; t.Next := o END;
+    END
+  END RegisterOT;
+
+  (* begin-procedure-description
+---
+**UnRegisterOT** enrolls an OpDesc table of function pointers in the Files module.
+  end-procedure-description *)
+  PROCEDURE UnRegisterOT*(i: INTEGER);
+    VAR t: OT;
+  BEGIN
+    IF i > 0 THEN
+      t:=Ot;
+      WHILE (t.Next # NIL) & (t.Next.Id # i) DO t:=t.Next END;
+      IF (t.Next # NIL) & (t.Next.Id = i) THEN t.Next := t.Next.Next END;
+    END
+  END UnRegisterOT;
 
   (* begin-section-description
 ## ---------- System Use
@@ -744,14 +774,16 @@ MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
   BEGIN 
     root := 0; 
 
-    Op :=  SYSTEM.VAL(OP,SYSTEM.ADR(OPBase));  (* Kernel not initialized so no NEW() *)
-    Op.Set :=         Set;
-    Op.Pos :=         Pos;
-    Op.Base :=        Base;
-    Op.ReadByte :=    ReadByte;
-    Op.Read :=        Read;
-    Op.WriteByte :=   WriteByte;
-    Op.Write :=       Write;
+    Ot :=  SYSTEM.VAL(OT,SYSTEM.ADR(OTBase));  (* Kernel not initialized so no NEW() *)
+    Ot.Next :=        NIL;
+    Ot.Id :=          0;
+    Ot.Set :=         Set;
+    Ot.Pos :=         Pos;
+    Ot.Base :=        Base;
+    Ot.ReadByte :=    ReadByte;
+    Ot.Read :=        Read;
+    Ot.WriteByte :=   WriteByte;
+    Ot.Write :=       Write;
     Kernel.Init; FileDir.Init
   END Init;
 
